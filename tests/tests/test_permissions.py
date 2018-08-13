@@ -23,14 +23,33 @@ class TestView(APIView):
 
         return True
 
+    def test_message(self, request):
+        from rest_framework.request import Request
+
+        request = Request(request)
+
+        self.request = request
+
+        last_permission = None
+
+        for permission in self.get_permissions():
+            last_permission = permission
+            if not permission.has_permission(request, self):
+                return permission.message
+        return last_permission.message
+
 
 class TruePermission(BasePermission):
+
+    message = "YES"
 
     def has_permission(self, request, view):
         return True
 
 
 class FalsePermission(BasePermission):
+
+    message = "NO"
 
     def has_permission(self, request, view):
         return False
@@ -50,7 +69,13 @@ class PermissionsTestCase(TestCase):
         else:
             self.assertFalse(result)
 
-    def test_conditional_permissions_with_assigment(self):
+    def assertViewPermissionMessage(self, view_class, message):
+        view = view_class()
+        request = self.requests.get('/')
+        permission_message = view.test_message(request)
+        self.assertEqual(message, permission_message)
+
+    def test_conditional_permissions_with_assignment(self):
 
         perm1 = C(TruePermission)
         perm1 |= ~C(TruePermission)
@@ -69,6 +94,32 @@ class PermissionsTestCase(TestCase):
             permission_classes = [perm2]
 
         self.assertViewPermission(View2, True)
+
+    def test_conditional_permissions_with_message(self):
+
+        perm1 = And(TruePermission, FalsePermission)
+
+        class View1(TestView):
+            permission_classes = [perm1]
+
+        self.assertViewPermissionMessage(View1, FalsePermission.message)
+
+        perm2 = Or(TruePermission, FalsePermission)
+
+        class View2(TestView):
+            permission_classes = [perm2]
+
+        self.assertViewPermissionMessage(View2, TruePermission.message)
+
+        perm3 = And(
+            Or(Not(FalsePermission), FalsePermission),
+            Or(Not(TruePermission), FalsePermission)
+        )
+
+        class View3(TestView):
+            permission_classes = [perm3]
+
+        self.assertViewPermissionMessage(View3, FalsePermission.message)
 
     def test_single_conditional_permission_true(self):
 

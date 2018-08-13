@@ -15,7 +15,7 @@ def _is_permission_factory(obj):
 
 
 class ConditionalPermission(permissions.BasePermission):
-    '''
+    """
     Example of usage:
     >>> class MyView(GinericView):
     >>>     permission_classes = (ConditionalPermission, )
@@ -24,7 +24,7 @@ class ConditionalPermission(permissions.BasePermission):
     Or you can just:
     >>> class MyView(GinericView):
     >>>     permission_classes = (C(Perm1) | ~C(Perm2), )
-    '''
+    """
     permission_condition_field = 'permission_condition'
 
     def get_permission_condition(self, view):
@@ -47,7 +47,7 @@ class ConditionalPermission(permissions.BasePermission):
 
 
 class Condition(object):
-    '''
+    """
     Provides a simple way to define complex and multi-depth
     (with logic operators) permissions tree.
 
@@ -61,7 +61,7 @@ class Condition(object):
     permission will be evaluated to `True`:
     >>> cond1 = C(Perm1, Perm2, Perm3, Perm4,
     >>>           reduce_op=operator.add, lazy_until=3, negated=True)
-    '''
+    """
     @classmethod
     def And(cls, *perms_or_conds):
         return cls(reduce_op=operator.and_, lazy_until=False, *perms_or_conds)
@@ -79,13 +79,17 @@ class Condition(object):
         self.reduce_op = kwargs.get('reduce_op', operator.and_)
         self.lazy_until = kwargs.get('lazy_until', False)
         self.negated = kwargs.get('negated')
+        self.message = None
 
     def evaluate_permissions(self, permission_name, *args, **kwargs):
+
         reduced_result = _NONE
+        last_condition = None
 
         for condition in self.perms_or_conds:
             if hasattr(condition, 'evaluate_permissions'):
-                result = condition.evaluate_permissions(permission_name, *args, **kwargs)
+                result = condition.evaluate_permissions(
+                    permission_name, *args, **kwargs)
             else:
                 if _is_permission_factory(condition):
                     condition = condition()
@@ -103,8 +107,15 @@ class Condition(object):
             else:
                 reduced_result = self.reduce_op(reduced_result, result)
 
-            if self.lazy_until is not None and self.lazy_until is reduced_result:
+            last_condition = condition
+
+            if self.lazy_until is not None and \
+                    self.lazy_until is reduced_result:
                 break
+
+        message = getattr(last_condition, 'message', None)
+        if message:
+            self.message = message
 
         if reduced_result is not _NONE:
             return not reduced_result if self.negated else reduced_result

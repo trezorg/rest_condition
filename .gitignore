@@ -41,3 +41,5 @@ venv/
 
 # Some temp files
 .DS_Store
+
+.idea/
